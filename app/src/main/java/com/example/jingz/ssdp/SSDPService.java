@@ -37,23 +37,19 @@ public class SSDPService extends Service {
     @Override
     public int  onStartCommand(Intent intent, int flags, int startId) {
 //        EditText logtext=(EditText) findViewById(R.id.logText);
-        System.out.println("启动SSDP服务");
         Timer t=new Timer();
 
         t.schedule(new TimerTask() {
             int i=0;
             @Override
             public void run(){
-                System.out.println("定时运行");
                 String str="发送消息";
                 i=i+1;
                 if (onFindListener != null){
-                    System.out.println("执行回调");
                     onFindListener.onFind("ssdp 广播..."+String.valueOf(i));
                 }
             }
         }, 2000,1000);
-
         return super.onStartCommand(intent, flags, startId);
     }
     public void run(){

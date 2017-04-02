@@ -4,6 +4,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
@@ -16,11 +17,21 @@ import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.EditText;
+import android.widget.TextView;
+
+import java.io.IOException;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.net.MulticastSocket;
+import java.net.SocketException;
+import java.net.UnknownHostException;
+import java.util.Observable;
 
 public class MainActivity extends AppCompatActivity {
     Pushhandler pushhandler;
     private SSDPService ssdpService;
-    private EditText logtext;
+    private TextView logtext;
     private SSDPService.SSDPbinder myBinder=null;
     private ServiceConnection conn = new ServiceConnection() {
         @Override
@@ -40,8 +51,6 @@ public class MainActivity extends AppCompatActivity {
                     b.putString("text",data);
                     msg.setData(b);
                     MainActivity.this.pushhandler.sendMessage(msg);
- //                   System.out.println("activity:"+data);
-  //                  logtext.setText(data);
                 }
             });
 
@@ -51,50 +60,93 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-//        Intent ssdpIntent = new Intent(this, SSDPService.class);
-//        //启动SSDB服务
-//        startService(ssdpIntent);
-        Intent ssdp = new Intent(this, SSDPService.class);
-        //开始服务
-        startService(ssdp);
-        //绑定服务
-        this.bindService(ssdp, conn, Context.BIND_AUTO_CREATE);
-
+//        Intent ssdp = new Intent(this, SSDPService.class);
+//        startService(ssdp);
+//        this.bindService(ssdp, conn, Context.BIND_AUTO_CREATE);
 
         setContentView(R.layout.activity_main);
-        Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
-        logtext = (EditText) findViewById(R.id.logText);
-        logtext.setEnabled(false);
-        setSupportActionBar(toolbar);
+        logtext = (TextView) findViewById(R.id.logText);
         pushhandler=new Pushhandler();
 
+//        WifiManager manager = (WifiManager) this.getSystemService(Context.WIFI_SERVICE);
+//        WifiManager.MulticastLock lock= manager.createMulticastLock("test wifi");
+        //新线程
 
-//        logtext.setText("start...");
-//        logtext.setEnabled(false);
-    }
 
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        // Inflate the menu; this adds items to the action bar if it is present.
-        getMenuInflater().inflate(R.menu.menu_main, menu);
-        return true;
-    }
+        class MutliThread extends Thread{
+            MutliThread(){
+                super();//调用父类带参数的构造方法
+            }
+            public void run(){
+                String message="NOTIFY * HTTP/1.1\n" +
+                        "Host: 239.255.255.250:1900\n" +
+                        "NT: someunique:idscheme3\n" +
+                        "NTS: ssdp:byebye\n" +
+                        "USN: someunique:idscheme3";
+                DatagramSocket s = null;
+                InetAddress local = null;
+                try {
+                    s = new DatagramSocket();
 
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
-        int id = item.getItemId();
+                    try{
+                        System.out.println("获取名称");
+                        local = InetAddress.getByName("255.255.255.255");
+                    }catch (UnknownHostException e){
+                        System.out.println("获取名称报错");
+                    }
 
-        //noinspection SimplifiableIfStatement
-        if (id == R.id.action_settings) {
-            return true;
+                    try{
+                        System.out.println("发送数据");
+                        int i=0;
+                        while (i<100){
+                            i++;
+                            String msg=(message+String.valueOf(i));
+                            msg=(message);
+                            byte[] messageByte=msg.getBytes();
+                            int msg_length=msg.length();
+
+                            Message msgdata = new Message();
+                            Bundle b = new Bundle();
+                            b.putString("text",msg);
+                            msgdata.setData(b);
+                            MainActivity.this.pushhandler.sendMessage(msgdata);
+
+
+                            DatagramPacket p = new DatagramPacket(messageByte, msg_length, local, 1990);
+                            s.send(p);
+                            try{
+                                Thread.sleep(10000);
+                            }catch (InterruptedException e){
+                                System.out.println("sleep时发生错误");
+                            };
+                        }
+
+                        s.close();
+                    }catch (IOException e){
+                        System.out.println("发送数据报错");
+                    }
+                } catch (SocketException e) {
+                    e.printStackTrace();
+                    System.out.println("发送了错误");
+
+                }
+                System.out.println("执行完了");
+            }
         }
+        MutliThread m1=new MutliThread();
+        m1.start();
 
-        return super.onOptionsItemSelected(item);
+//        logtext.setEnabled(false);
+//        setSupportActionBar(toolbar);
+
+
+//        Intent setting=new Intent(this,Main2Activity.class);
+//        startActivity(setting);
+//        logtext.setText("start");
     }
+
+
+
     class Pushhandler extends Handler {
         @Override
         public void handleMessage(Message msg) {
@@ -105,23 +157,5 @@ public class MainActivity extends AppCompatActivity {
                 logtext.append(text+"\n");
 
         }
-        }
-
-//    @Override
-//    public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
-//        System.out.println("连接服务完成");
-//        myBinder = (SSDPService.SSDPbinder) iBinder;
-//        myBinder.getService().setCallback(new SSDPService.Callback(){
-//            @Override
-//            public void onDataChange(String data) {
-//                logtext.setText(data);
-//            }
-//        });
-//    }
-//
-//    @Override
-//    public void onServiceDisconnected(ComponentName name) {
-//        System.out.println("中断服务连接");
-//
-//    }
+    }
 }
